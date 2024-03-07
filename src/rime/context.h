@@ -71,6 +71,7 @@ class RIME_API Context {
   const CommitHistory& commit_history() const { return commit_history_; }
 
   void set_option(const string& name, bool value);
+	void set_option_silent(const string& name, bool value);
   bool get_option(const string& name) const;
   void set_property(const string& name, const string& value);
   string get_property(const string& name) const;

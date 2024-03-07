@@ -195,6 +195,11 @@ typedef struct rime_schema_list_t {
   RimeSchemaListItem* list;
 } RimeSchemaList;
 
+typedef struct rime_option_list_t {
+  size_t size;
+  char** list;
+} RimeOptionList;
+
 typedef void (*RimeNotificationHandler)(void* context_object,
                                         RimeSessionId session_id,
                                         const char* message_type,
@@ -308,7 +313,23 @@ RIME_API Bool RimeDeleteCandidateOnCurrentPage(RimeSessionId session_id,
 RIME_API void RimeSetOption(RimeSessionId session_id,
                             const char* option,
                             Bool value);
+
+RIME_API void RimeSetOptionSilent(RimeSessionId session_id,
+                            const char* option,
+                            Bool value);
+
 RIME_API Bool RimeGetOption(RimeSessionId session_id, const char* option);
+
+
+RIME_API Bool RimeGetOptions(RimeSessionId session_id, char** options, Bool* values, int length);
+
+RIME_API Bool RimeGetSavedOption(RimeSessionId session_id, const char* option);
+
+RIME_API void RimeSaveOption(RimeSessionId session_id,
+                            const char* option,
+                            Bool value);
+
+RIME_API void RimeSaveOptions(char** options, Bool* values, int length);
 
 RIME_API void RimeSetProperty(RimeSessionId session_id,
                               const char* prop,
@@ -319,11 +340,14 @@ RIME_API Bool RimeGetProperty(RimeSessionId session_id,
                               size_t buffer_size);
 
 RIME_API Bool RimeGetSchemaList(RimeSchemaList* schema_list);
+RIME_API Bool RimeGetOptionList(RimeOptionList* options_list);
 RIME_API void RimeFreeSchemaList(RimeSchemaList* schema_list);
 RIME_API Bool RimeGetCurrentSchema(RimeSessionId session_id,
                                    char* schema_id,
                                    size_t buffer_size);
 RIME_API Bool RimeSelectSchema(RimeSessionId session_id, const char* schema_id);
+RIME_API Bool RimeSelectSchemaSilent(RimeSessionId session_id, const char* schema_id);
+RIME_API void RimeSaveSchema(const char* schema_id);
 
 // Configuration
 

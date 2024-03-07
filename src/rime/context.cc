@@ -280,6 +280,10 @@ void Context::set_option(const string& name, bool value) {
   option_update_notifier_(this, name);
 }
 
+void Context::set_option_silent(const string& name, bool value) {
+  options_[name] = value;
+}
+
 bool Context::get_option(const string& name) const {
   auto it = options_.find(name);
   if (it != options_.end())

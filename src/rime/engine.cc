@@ -31,8 +31,10 @@ class ConcreteEngine : public Engine {
   virtual ~ConcreteEngine();
   virtual bool ProcessKey(const KeyEvent& key_event);
   virtual void ApplySchema(Schema* schema);
+  virtual void ApplySchemaSilent(Schema* schema);
   virtual void CommitText(string text);
   virtual void Compose(Context* ctx);
+  virtual void* getSwitcher();
 
  protected:
   void InitializeComponents();
@@ -45,6 +47,7 @@ class ConcreteEngine : public Engine {
   void OnContextUpdate(Context* ctx);
   void OnOptionUpdate(Context* ctx, const string& option);
   void OnPropertyUpdate(Context* ctx, const string& property);
+  void ApplySchema(Schema* schema, bool is_notify);
 
   vector<of<Processor>> processors_;
   vector<of<Segmentor>> segmentors_;
@@ -165,6 +168,11 @@ void ConcreteEngine::Compose(Context* ctx) {
   DLOG(INFO) << "composition: [" << comp.GetDebugText() << "]";
 }
 
+void* ConcreteEngine::getSwitcher() {
+  Switcher* switcher = switcher_.lock().get();
+  return switcher;
+}
+
 void ConcreteEngine::CalculateSegmentation(Segmentation* segments) {
   DLOG(INFO) << "CalculateSegmentation, segments: " << segments->size()
              << ", finished? " << segments->HasFinishedSegmentation();
@@ -278,23 +286,36 @@ void ConcreteEngine::OnSelect(Context* ctx) {
   }
 }
 
-void ConcreteEngine::ApplySchema(Schema* schema) {
-  if (!schema)
+void ConcreteEngine::ApplySchema(Schema* schema, bool is_notify) {
+	if (!schema)
     return;
-  if (auto switcher = switcher_.lock()) {
-    if (Config* user_config = switcher->user_config()) {
-      user_config->SetString("var/previously_selected_schema",
-                             schema->schema_id());
-      user_config->SetInt("var/schema_access_time/" + schema->schema_id(),
-                          time(NULL));
+  if (is_notify) {
+		if (auto switcher = switcher_.lock()) {
+			if (Config* user_config = switcher->user_config()) {
+				user_config->SetString("var/previously_selected_schema",
+															 schema->schema_id());
+				user_config->SetInt("var/schema_access_time/" + schema->schema_id(),
+														time(NULL));
+			}
     }
   }
+
   schema_.reset(schema);
   context_->Clear();
   context_->ClearTransientOptions();
   InitializeComponents();
   InitializeOptions();
-  message_sink_("schema", schema->schema_id() + "/" + schema->schema_name());
+  if (is_notify) {
+		message_sink_("schema", schema->schema_id() + "/" + schema->schema_name());
+  }
+}
+
+void ConcreteEngine::ApplySchema(Schema* schema) {
+	ApplySchema(schema, true);
+}
+
+void ConcreteEngine::ApplySchemaSilent(Schema* schema) {
+  ApplySchema(schema, false);
 }
 
 void ConcreteEngine::InitializeComponents() {

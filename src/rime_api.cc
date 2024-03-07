@@ -20,6 +20,8 @@
 #include <rime/setup.h>
 #include <rime/signature.h>
 #include <rime/switches.h>
+#include <rime/engine.h>
+#include <rime/switcher.h>
 #include <rime_api.h>
 
 using namespace rime;
@@ -441,6 +443,65 @@ RIME_API void RimeSetOption(RimeSessionId session_id,
   if (!ctx)
     return;
   ctx->set_option(option, !!value);
+  LOG(INFO) << "[RimeSetOption] Set option [" + std::string(option) + "][" + std::to_string(value) + "]";
+}
+
+RIME_API void RimeSetOptionSilent(RimeSessionId session_id,
+                            const char* option,
+                            Bool value) {
+
+  an<Session> session(Service::instance().GetSession(session_id));
+  if (!session)
+    return;
+  Context* ctx = session->context();
+  if (!ctx)
+    return;
+  ctx->set_option_silent(option, !!value);
+  LOG(INFO) << "[RimeSetOptionSilent] Set option [" + std::string(option) + "][" + std::to_string(value) + "]";
+}
+
+RIME_API void RimeSaveOption(RimeSessionId session_id,
+                            const char* option,
+                            Bool value) {
+  an<Session> session(Service::instance().GetSession(session_id));
+  if (!session)
+    return;
+
+  Engine* engine = session->getEngine();
+  Switcher* swicher = static_cast<Switcher*>(engine->getSwitcher());
+  set<string> saveOptions = swicher -> getSaveOptions();
+  if(saveOptions.find(option) != saveOptions.end()) {
+    LOG(INFO) << "[RimeSaveOption] Save option [" + std::string(option) + "][" + std::to_string(value) + "]";
+    Config* user_config = swicher -> user_config();
+    user_config->SetBool("var/option/" + std::string(option), !!value);
+  }else{
+    LOG(INFO) << "[RimeSaveOption] Not save option [" + std::string(option) + "][" + std::to_string(value) + "]";
+  }
+}
+
+RIME_API void RimeSaveOptions(char** options, Bool* values, int length) {
+	SessionId sessionId = Service::instance().CreateSession();
+  an<Session> session(Service::instance().GetSession(sessionId));
+  if (!session)
+    return;
+
+  Engine* engine = session->getEngine();
+  Switcher* swicher = static_cast<Switcher*>(engine->getSwitcher());
+  set<string> saveOptions = swicher -> getSaveOptions();
+	Config* user_config = swicher -> user_config();
+
+	for (int i=0; i < length; i++) {
+		const char* option_name = options[i];
+		Bool value = values[i];
+
+		if(saveOptions.find(option_name) != saveOptions.end()) {
+			LOG(INFO) << "[RimeSaveOptions] Save option [" + std::string(option_name) + "][" + std::to_string(value) + "]";
+			user_config->SetBool("var/option/" + std::string(option_name), !!value);
+		} else {
+			LOG(INFO) << "[RimeSaveOptions] Not save option [" + std::string(option_name) + "][" + std::to_string(value) + "]";
+		}
+	}
+	Service::instance().DestroySession(sessionId);
 }
 
 RIME_API Bool RimeGetOption(RimeSessionId session_id, const char* option) {
@@ -451,6 +512,35 @@ RIME_API Bool RimeGetOption(RimeSessionId session_id, const char* option) {
   if (!ctx)
     return False;
   return Bool(ctx->get_option(option));
+}
+
+RIME_API Bool RimeGetSavedOption(RimeSessionId session_id,
+                            const char* option) {
+  an<Session> session(Service::instance().GetSession(session_id));
+  if (!session)
+    return False;
+
+  Engine* engine = session->getEngine();
+  Switcher* swicher = static_cast<Switcher*>(engine->getSwitcher());
+	Config* user_config = swicher -> user_config();
+	bool value;
+  user_config->GetBool("var/option/" + std::string(option), &value);
+	return value;
+}
+
+RIME_API Bool RimeGetOptions(RimeSessionId session_id, char** options, Bool* values, int length) {
+  an<Session> session(Service::instance().GetSession(session_id));
+  if (!session)
+    return False;
+  Context* ctx = session->context();
+  if (!ctx)
+    return False;
+	
+	for (int i=0; i < length; i++) {
+		const char* option_name = options[i];
+		values[i] = Bool(ctx->get_option(option_name));
+	}
+  return True;
 }
 
 RIME_API void RimeSetProperty(RimeSessionId session_id,
@@ -520,6 +610,53 @@ RIME_API Bool RimeGetSchemaList(RimeSchemaList* output) {
   return True;
 }
 
+
+RIME_API Bool RimeGetOptionList(RimeOptionList* output) {
+	RimeSchemaList schemaList;
+	std::set<std::string> options;
+	std::set<std::string>* p_options = &options;
+	if(RimeGetSchemaList(&schemaList)){
+		for (size_t i = 0; i < schemaList.size; ++i) {
+			LOG(INFO) << "[RimeGetOptionList] opening schema[" + std::string(schemaList.list[i].schema_id) + "]";
+			RimeConfig config;
+			if(RimeSchemaOpen(schemaList.list[i].schema_id, &config)) {
+				LOG(INFO) << "[RimeGetOptionList] opened schema[" + std::string(schemaList.list[i].schema_id) + "]";
+				Config* c = static_cast<Config*>(config.ptr);
+				Switches switches(c);
+				switches.FindOption([p_options](Switches::SwitchOption option) {
+					LOG(INFO) << "[RimeGetOptionList] option name[" + option.option_name + "]";
+					p_options -> insert(option.option_name);
+					return Switches::kContinue;
+				});
+			} else {
+				LOG(INFO) << "[RimeGetOptionList] Unable to open schema[" + std::string(schemaList.list[i].schema_id) + "]";
+			}
+		}
+		
+		LOG(INFO) << "[RimeGetOptionList] options[" + std::to_string(options.size()) + "]";
+		output->size = options.size();
+		if (output->size > 0) {
+			output->list = new char*[output->size];
+			std::set<std::string>::iterator it;
+			int i = 0;
+			for (it = options.begin(); it != options.end(); ++it) {
+					std::string s = *it;
+					LOG(INFO) << "[RimeGetOptionList] put option[" + s + "]";
+					output->list[i] = new char[s.length() + 1];
+					strcpy(output->list[i], s.c_str());
+					LOG(INFO) << "[RimeGetOptionList] have put option[" + std::string(output->list[i]) + "]";
+					i++;
+			}
+			return True;
+		} else {
+			return False;
+		}
+	} else {
+    LOG(INFO) << "[RimeGetOptionList] Unable to get schema list";
+	}
+	return False;
+}
+
 RIME_API void RimeFreeSchemaList(RimeSchemaList* schema_list) {
   if (!schema_list)
     return;
@@ -556,6 +693,32 @@ RIME_API Bool RimeSelectSchema(RimeSessionId session_id,
     return False;
   session->ApplySchema(new Schema(schema_id));
   return True;
+}
+
+RIME_API Bool RimeSelectSchemaSilent(RimeSessionId session_id,
+                               const char* schema_id) {
+  if (!schema_id)
+    return False;
+  an<Session> session(Service::instance().GetSession(session_id));
+  if (!session)
+    return False;
+  session->ApplySchemaSilent(new Schema(schema_id));
+  return True;
+}
+
+RIME_API void RimeSaveSchema(const char* schema_id) {
+	SessionId sessionId = Service::instance().CreateSession();
+  an<Session> session(Service::instance().GetSession(sessionId));
+  if (!session)
+    return;
+
+  Engine* engine = session->getEngine();
+  Switcher* swicher = static_cast<Switcher*>(engine->getSwitcher());
+  set<string> saveOptions = swicher -> getSaveOptions();
+	Config* user_config = swicher -> user_config();
+	user_config->SetString("var/previously_selected_schema", schema_id);
+	LOG(INFO) << "[RimeSaveOptions] Save Schema [" + std::string(schema_id) + "]";
+	Service::instance().DestroySession(sessionId);
 }
 
 // config

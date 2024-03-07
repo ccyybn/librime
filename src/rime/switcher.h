@@ -42,6 +42,7 @@ class Switcher : public Processor, public Engine {
   Engine* attached_engine() const { return engine_; }
   Config* user_config() const { return user_config_.get(); }
   bool active() const { return active_; }
+  set<string> getSaveOptions(){return save_options_;}
 
  protected:
   void InitializeComponents();
